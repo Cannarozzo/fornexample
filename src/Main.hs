@@ -1,15 +1,20 @@
-{-# LANGUAGE OverloadedStrings, TypeFamilies, QuasiQuotes,
-             TemplateHaskell, GADTs, FlexibleContexts,
-             MultiParamTypeClasses, DeriveDataTypeable,
-             GeneralizedNewtypeDeriving, ViewPatterns #-}
+{-# LANGUAGE DeriveDataTypeable         #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE QuasiQuotes                #-}
+{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TypeFamilies               #-}
 module Main where
-import Database.Persist.Postgresql
-import Control.Monad.Logger (runStdoutLoggingT)
-import Data.Text (Text)
-import Data.Time
-import qualified Data.Text as T
-import Control.Applicative
-import Yesod
+import           Control.Applicative
+import           Control.Monad.Logger        (runStdoutLoggingT)
+import           Data.Text                   (Text)
+import qualified Data.Text                   as T
+import           Data.Time
+import           Database.Persist.Postgresql
+import           Yesod
 --import qualified Database.Esqueleto as E
 --import Database.Esqueleto ((^.))
 data Pagina = Pagina{connPool :: ConnectionPool}
@@ -65,7 +70,7 @@ formOrdem = renderDivs $ Ordem <$>
              lift (liftIO $ return False)
 
 pecas = do
-       entidades <- runDB $ selectList [] [Asc PecaNome] 
+       entidades <- runDB $ selectList [] [Asc PecaNome]
        optionsPairs $ fmap (\ent -> (pecaNome $ entityVal ent, entityKey ent)) entidades
 
 forns = do
@@ -80,7 +85,7 @@ formPeca = renderDivs $ Peca <$>
 
 formForn :: Form Fornecedor
 formForn = renderDivs $ Fornecedor <$>
-             areq textField "Nome" Nothing 
+             areq textField "Nome" Nothing
 
 widgetForm :: Route Pagina -> Enctype -> Widget -> Text -> Widget
 widgetForm x enctype widget y = [whamlet|
@@ -148,18 +153,20 @@ postOrdemR = do
 
 getListarOrdemR :: Handler Html
 getListarOrdemR = do
-                 ordens <- runDB $ (rawSql "SELECT ??, ?? \
+                 ordens <- runDB $ (rawSql "SELECT ??, ??, ?? \
                                    \FROM ordem INNER JOIN peca \
-                                   \ON ordem.peca_id=peca.id" [])::Handler [(Entity Ordem, Entity Peca)]
+                                   \ON ordem.peca_id=peca.id \
+                                   \INNER JOIN fornecedor  \
+                                   \ON ordem.forn_id=fornecedor.id" [])::Handler [(Entity Ordem, Entity Peca, Entity Fornecedor)]
                  defaultLayout [whamlet|
                       <h1> Lista de Ordens
-                      $forall (Entity oq _, Entity _ np) <- ordens
-                          <p> Ordem #{fromSqlKey oq}: #{pecaNome np}
+                      $forall (Entity oq _, Entity _ np,Entity _ nf) <- ordens
+                          <p> Ordem #{fromSqlKey oq}: #{pecaNome np}: #{fornecedorNome nf}
                  |]
 
 connStr = "dbname=dd9en8l5q4hh2a host=ec2-107-21-219-201.compute-1.amazonaws.com user=kpuwtbqndoeyqb password=aCROh525uugAWF1l7kahlNN3E0 port=5432"
 
 main::IO()
-main = runStdoutLoggingT $ withPostgresqlPool connStr 10 $ \pool -> liftIO $ do 
+main = runStdoutLoggingT $ withPostgresqlPool connStr 10 $ \pool -> liftIO $ do
        runSqlPersistMPool (runMigration migrateAll) pool
        warpEnv (Pagina pool)
